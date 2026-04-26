@@ -7,15 +7,17 @@ class VideoCard extends StatelessWidget {
   final bool isDownloading;
   final double? downloadProgress;
   final VoidCallback? onTap;
+  final VoidCallback? onCancel;
 
   const VideoCard({
-    Key? key,
+    super.key,
     required this.video,
     required this.onDownload,
     this.isDownloading = false,
     this.downloadProgress,
     this.onTap,
-  }) : super(key: key);
+    this.onCancel,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -119,19 +121,30 @@ class VideoCard extends StatelessWidget {
 
                     // Download button/progress
                     if (isDownloading && downloadProgress != null)
-                      Column(
+                      Row(
                         children: [
-                          LinearProgressIndicator(
-                            value: downloadProgress,
-                            backgroundColor: Colors.grey[300],
-                            valueColor:
-                                const AlwaysStoppedAnimation<Color>(Colors.red),
+                          Expanded(
+                            child: Column(
+                              children: [
+                                LinearProgressIndicator(
+                                  value: downloadProgress,
+                                  backgroundColor: Colors.grey[300],
+                                  valueColor:
+                                      const AlwaysStoppedAnimation<Color>(Colors.red),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '${(downloadProgress! * 100).toStringAsFixed(1)}%',
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              ],
+                            ),
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${(downloadProgress! * 100).toStringAsFixed(1)}%',
-                            style: const TextStyle(fontSize: 12),
-                          ),
+                          if (onCancel != null)
+                            IconButton(
+                              icon: const Icon(Icons.stop_circle, color: Colors.red),
+                              onPressed: onCancel,
+                            ),
                         ],
                       )
                     else

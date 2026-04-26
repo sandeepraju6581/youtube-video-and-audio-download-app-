@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:speech_to_text/speech_to_text.dart';
+import 'package:dio/dio.dart';
 import '../services/youtube_downloader_service.dart';
 import '../models/video_model.dart';
 import '../widgets/video_card.dart';
-import '../widgets/download_progress.dart';
 
 class SearchScreen extends StatefulWidget {
-  const SearchScreen({Key? key}) : super(key: key);
+  const SearchScreen({super.key});
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
@@ -14,29 +15,112 @@ class SearchScreen extends StatefulWidget {
 class _SearchScreenState extends State<SearchScreen> {
   final TextEditingController _searchController = TextEditingController();
   final YouTubeDownloaderService _downloader = YouTubeDownloaderService();
+  final SpeechToText _speechToText = SpeechToText();
+  bool _speechEnabled = false;
 
   List<VideoModel> _videos = [];
   bool _isSearching = false;
-  bool _isLoadingMore = false;
-  int _currentPage = 0;
   String? _error;
 
   // Download tracking
   String? _downloadingVideoId;
   double _downloadProgress = 0.0;
-  String _downloadStatus = '';
 
   int _downloadType = 0; // 0: Video, 1: Audio
   String _selectedQuality = '720p';
   String _selectedAudioQuality = 'High';
+
+  CancelToken? _cancelToken;
+  List<VideoModel> _trendingVideos = [];
+  bool _isLoadingTrending = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTrendingVideos();
+  }
+
+  Future<void> _loadTrendingVideos() async {
+    try {
+      final results = await _downloader.searchVideos('new telugusong');
+      if (mounted) {
+        setState(() {
+          _trendingVideos = results.take(10).toList();
+          _isLoadingTrending = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoadingTrending = false;
+        });
+      }
+    }
+  }
+
+  void _toggleListening() async {
+    // Lazily initialize SpeechToText when the user first clicks the mic.
+    if (!_speechEnabled) {
+      bool initialized = await _speechToText.initialize(
+        onStatus: (status) {
+          if (mounted) setState(() {});
+          if (status == 'done') {
+            if (mounted && _searchController.text.isNotEmpty && !_isSearching) {
+              _searchVideos();
+            }
+          }
+        },
+        onError: (errorNotification) {
+          debugPrint('Speech error: ${errorNotification.errorMsg}');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                  content: Text('Speech error: ${errorNotification.errorMsg}')),
+            );
+          }
+        },
+      );
+
+      if (mounted) {
+        setState(() {
+          _speechEnabled = initialized;
+        });
+      }
+
+      if (!initialized) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content: Text(
+                    'Speech recognition is not available or permission was denied.')),
+          );
+        }
+        return;
+      }
+    }
+
+    if (_speechToText.isListening) {
+      await _speechToText.stop();
+      if (mounted) setState(() {});
+    } else {
+      await _speechToText.listen(
+        onResult: (result) {
+          if (mounted) {
+            setState(() {
+              _searchController.text = result.recognizedWords;
+            });
+          }
+        },
+      );
+      if (mounted) setState(() {});
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Search YouTube'),
-        backgroundColor: Colors.red,
-        foregroundColor: Colors.white,
         actions: [
           IconButton(
             icon: const Icon(Icons.download),
@@ -51,9 +135,11 @@ class _SearchScreenState extends State<SearchScreen> {
           Expanded(
             child: _isSearching && _videos.isEmpty
                 ? const Center(child: CircularProgressIndicator())
-                : _videos.isEmpty
-                    ? _buildEmptyState()
-                    : _buildVideoList(),
+                : _videos.isNotEmpty
+                    ? _buildVideoList(_videos)
+                    : _searchController.text.isNotEmpty
+                        ? _buildEmptyState()
+                        : _buildTrendingList(),
           ),
         ],
       ),
@@ -64,10 +150,10 @@ class _SearchScreenState extends State<SearchScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).cardColor,
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
+            color: Colors.grey.withValues(alpha: 0.1),
             spreadRadius: 1,
             blurRadius: 5,
           ),
@@ -84,15 +170,26 @@ class _SearchScreenState extends State<SearchScreen> {
                   borderRadius: BorderRadius.circular(24),
                 ),
                 prefixIcon: const Icon(Icons.search),
-                suffixIcon: _searchController.text.isNotEmpty
-                    ? IconButton(
+                suffixIcon: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_searchController.text.isNotEmpty)
+                      IconButton(
                         icon: const Icon(Icons.clear),
                         onPressed: () {
                           _searchController.clear();
                           setState(() {});
                         },
-                      )
-                    : null,
+                      ),
+                    IconButton(
+                      icon: Icon(
+                        _speechToText.isListening ? Icons.mic : Icons.mic_none,
+                        color: _speechToText.isListening ? Colors.red : null,
+                      ),
+                      onPressed: _toggleListening,
+                    ),
+                  ],
+                ),
               ),
               onSubmitted: (_) => _searchVideos(),
             ),
@@ -101,8 +198,8 @@ class _SearchScreenState extends State<SearchScreen> {
           ElevatedButton(
             onPressed: _isSearching ? null : _searchVideos,
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              foregroundColor: Theme.of(context).colorScheme.onPrimary,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(24),
               ),
@@ -141,7 +238,9 @@ class _SearchScreenState extends State<SearchScreen> {
   Widget _buildErrorWidget() {
     return Container(
       padding: const EdgeInsets.all(16),
-      color: Colors.red[50],
+      color: Theme.of(context).brightness == Brightness.dark
+          ? Colors.red[900]?.withValues(alpha: 0.3)
+          : Colors.red[50],
       child: Row(
         children: [
           const Icon(Icons.error, color: Colors.red),
@@ -161,11 +260,44 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
-  Widget _buildVideoList() {
+  Widget _buildTrendingList() {
+    if (_isLoadingTrending) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_trendingVideos.isEmpty) {
+      return _buildEmptyState();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              const Icon(Icons.local_fire_department,
+                  color: Colors.orange, size: 28),
+              const SizedBox(width: 8),
+              Text(
+                ' Telugu song',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(child: _buildVideoList(_trendingVideos)),
+      ],
+    );
+  }
+
+  Widget _buildVideoList(List<VideoModel> videoList) {
     return ListView.builder(
-      itemCount: _videos.length,
+      itemCount: videoList.length,
       itemBuilder: (context, index) {
-        final video = _videos[index];
+        final video = videoList[index];
         final isDownloading = _downloadingVideoId == video.id;
 
         return VideoCard(
@@ -173,6 +305,11 @@ class _SearchScreenState extends State<SearchScreen> {
           isDownloading: isDownloading,
           downloadProgress: isDownloading ? _downloadProgress : null,
           onDownload: () => _downloadVideo(video),
+          onCancel: isDownloading
+              ? () {
+                  _cancelToken?.cancel();
+                }
+              : null,
           onTap: () => _showVideoDetails(video),
         );
       },
@@ -180,6 +317,8 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Future<void> _searchVideos() async {
+    if (_isSearching) return; // Prevent overlapping requests
+
     final query = _searchController.text.trim();
     if (query.isEmpty) return;
 
@@ -293,8 +432,9 @@ class _SearchScreenState extends State<SearchScreen> {
                     child: ElevatedButton(
                       onPressed: () => Navigator.pop(context),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
-                        foregroundColor: Colors.white,
+                        backgroundColor: Theme.of(context).colorScheme.primary,
+                        foregroundColor:
+                            Theme.of(context).colorScheme.onPrimary,
                         padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
                       child: const Text('Apply Settings'),
@@ -321,17 +461,30 @@ class _SearchScreenState extends State<SearchScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected ? Colors.red : Colors.grey[200],
+          color: isSelected
+              ? Theme.of(context).colorScheme.primary
+              : (Theme.of(context).brightness == Brightness.dark
+                  ? Colors.grey[800]
+                  : Colors.grey[200]),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Column(
           children: [
-            Icon(icon, color: isSelected ? Colors.white : Colors.grey[700]),
+            Icon(icon,
+                color: isSelected
+                    ? Theme.of(context).colorScheme.onPrimary
+                    : (Theme.of(context).brightness == Brightness.dark
+                        ? Colors.grey[300]
+                        : Colors.grey[700])),
             const SizedBox(height: 4),
             Text(
               label,
               style: TextStyle(
-                color: isSelected ? Colors.white : Colors.grey[700],
+                color: isSelected
+                    ? Theme.of(context).colorScheme.onPrimary
+                    : (Theme.of(context).brightness == Brightness.dark
+                        ? Colors.grey[300]
+                        : Colors.grey[700]),
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -342,36 +495,40 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Future<void> _downloadVideo(VideoModel video) async {
+    _cancelToken?.cancel();
+    _cancelToken = CancelToken();
+
     setState(() {
       _downloadingVideoId = video.id;
       _downloadProgress = 0.0;
-      _downloadStatus = 'Starting...';
     });
 
     try {
-      String? downloadedPath;
-
       if (_downloadType == 0) {
-        downloadedPath = await _downloader.downloadVideo(
+        await _downloader.downloadVideo(
           video.url,
           _selectedQuality,
           (progress, status) {
-            setState(() {
-              _downloadProgress = progress;
-              _downloadStatus = status;
-            });
+            if (mounted) {
+              setState(() {
+                _downloadProgress = progress;
+              });
+            }
           },
+          cancelToken: _cancelToken,
         );
       } else {
-        downloadedPath = await _downloader.downloadAudio(
+        await _downloader.downloadAudio(
           video.url,
           _selectedAudioQuality,
           (progress, status) {
-            setState(() {
-              _downloadProgress = progress;
-              _downloadStatus = status;
-            });
+            if (mounted) {
+              setState(() {
+                _downloadProgress = progress;
+              });
+            }
           },
+          cancelToken: _cancelToken,
         );
       }
 
@@ -386,7 +543,12 @@ class _SearchScreenState extends State<SearchScreen> {
         setState(() {
           _downloadingVideoId = null;
         });
-        _showError('Download failed: $e');
+        if (e is DioException && e.type == DioExceptionType.cancel ||
+            e.toString().contains('cancelled')) {
+          _showError('Download cancelled');
+        } else {
+          _showError('Download failed: $e');
+        }
       }
     }
   }
@@ -462,8 +624,8 @@ class _SearchScreenState extends State<SearchScreen> {
                     _downloadVideo(video);
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    foregroundColor: Colors.white,
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    foregroundColor: Theme.of(context).colorScheme.onPrimary,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                   child: const Text('Download'),

@@ -25,7 +25,7 @@ class VideoModel {
     return VideoModel(
       id: video.id.value,
       title: video.title,
-      author: video.author ?? 'Unknown',
+      author: video.author,
       duration: _formatDuration(video.duration),
       thumbnailUrl: _getThumbnailUrl(video.id.value),
       url: video.url,

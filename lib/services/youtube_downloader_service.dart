@@ -122,12 +122,12 @@ class YouTubeDownloaderService {
     }
   }
 
-  // Download video (note: currently no merge — video only)
   Future<String> downloadVideo(
     String videoUrl,
     String quality,
-    Function(double progress, String status) onProgress,
-  ) async {
+    Function(double progress, String status) onProgress, {
+    CancelToken? cancelToken,
+  }) async {
     try {
       onProgress(0.0, 'Getting video information...');
       
@@ -141,7 +141,7 @@ class YouTubeDownloaderService {
 
       // Select muxed stream (contains both video + audio)
       StreamInfo? selectedVideoStream =
-          manifest.muxed.where((s) => s.videoQualityLabel.contains(quality) || s.qualityLabel.contains(quality)).firstOrNull;
+          manifest.muxed.where((s) => s.qualityLabel.contains(quality)).firstOrNull;
 
       if (selectedVideoStream == null && manifest.muxed.isNotEmpty) {
         selectedVideoStream = manifest.muxed.reduce((a, b) => 
@@ -164,9 +164,17 @@ class YouTubeDownloaderService {
 
       onProgress(0.4, 'Downloading video...');
       await _downloadStream(selectedVideoStream, outputPath,
-          (p) => onProgress(0.4 + p * 0.6, 'Downloading video...'));
+          (p) => onProgress(0.4 + p * 0.6, 'Downloading video...'),
+          cancelToken: cancelToken);
 
       onProgress(1.0, 'Download complete!');
+
+      try {
+        await _dio.download(
+          getThumbnailUrl(video.id.value),
+          '$outputPath.jpg',
+        );
+      } catch (_) {}
 
       final item = DownloadItem()
         ..youtubeId = video.id.value
@@ -190,8 +198,9 @@ class YouTubeDownloaderService {
   Future<String> downloadAudio(
     String videoUrl,
     String quality,
-    Function(double progress, String status) onProgress,
-  ) async {
+    Function(double progress, String status) onProgress, {
+    CancelToken? cancelToken,
+  }) async {
     try {
       onProgress(0.0, 'Getting video information...');
       
@@ -256,9 +265,16 @@ class YouTubeDownloaderService {
       onProgress(0.5, 'Downloading audio...');
       await _downloadStream(selectedAudio, outputPath, (p) {
         onProgress(0.5 + p * 0.5, 'Downloading audio...');
-      });
+      }, cancelToken: cancelToken);
 
       onProgress(1.0, 'Download complete!');
+
+      try {
+        await _dio.download(
+          getThumbnailUrl(video.id.value),
+          '$outputPath.jpg',
+        );
+      } catch (_) {}
 
       final item = DownloadItem()
         ..youtubeId = video.id.value
@@ -279,13 +295,14 @@ class YouTubeDownloaderService {
   }
 
   Future<void> _downloadStream(
-      StreamInfo streamInfo, String savePath, Function(double) onProgress) async {
+      StreamInfo streamInfo, String savePath, Function(double) onProgress, {CancelToken? cancelToken}) async {
     try {
       // Use Dio for downloading as it has highly optimized memory buffers 
       // compared to Dart's standard stream loop, speeding up the file writing.
       await _dio.download(
         streamInfo.url.toString(),
         savePath,
+        cancelToken: cancelToken,
         options: Options(
           // Important for avoiding basic throttles
           headers: {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'},
@@ -311,6 +328,12 @@ class YouTubeDownloaderService {
       int received = 0;
 
       await for (final data in stream) {
+        if (cancelToken?.isCancelled == true) {
+          await fileStream.flush();
+          await fileStream.close();
+          File(savePath).deleteSync();
+          throw Exception('Download cancelled');
+        }
         fileStream.add(data);
         received += data.length;
         if (totalSize > 0) {

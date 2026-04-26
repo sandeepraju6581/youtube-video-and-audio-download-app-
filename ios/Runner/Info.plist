@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Videodownloader</string>
+	<string>Mouse Music</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,7 +15,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>videodownloader</string>
+	<string>Mouse Music</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -66,5 +66,11 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Speech recognition is used to translate your voice into text for searching YouTube videos.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Microphone access is required to listen to your voice for searching YouTube videos.</string>
+	<key>NFCReaderUsageDescription</key>
+	<string>NFC access is required to share and receive files via NFC tags.</string>
 </dict>
 </plist>

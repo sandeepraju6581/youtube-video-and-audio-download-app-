@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:dio/dio.dart';
 import '../services/youtube_downloader_service.dart';
 import '../models/video_model.dart';
 
@@ -29,6 +30,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
   int _downloadType = 0; // 0: Video, 1: Audio
   String _selectedQuality = '720p';
   String _selectedAudioQuality = 'High';
+  CancelToken? _cancelToken;
 
   final List<String> _videoQualities = ['1080p', '720p', '480p', '360p'];
   final List<String> _audioQualities = ['High', 'Medium', 'Low'];
@@ -77,8 +79,6 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Download Engine'),
-        backgroundColor: Colors.red,
-        foregroundColor: Colors.white,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -93,7 +93,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                 border: const OutlineInputBorder(),
                 prefixIcon: const Icon(Icons.link),
                 suffixIcon: IconButton(
-                  icon: const Icon(Icons.search, color: Colors.red),
+                  icon: Icon(Icons.search, color: Theme.of(context).colorScheme.primary),
                   onPressed: _isLoading || _isDownloading ? null : _analyzeUrl,
                 ),
               ),
@@ -165,8 +165,8 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
             ElevatedButton(
               onPressed: _isLoading || _isDownloading ? null : _startDownloadNetwork,
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
@@ -187,7 +187,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.black,
+                  color: Theme.of(context).brightness == Brightness.dark ? Colors.grey[800] : Colors.grey[900],
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Column(
@@ -197,10 +197,20 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                     LinearProgressIndicator(
                       value: _downloadProgress,
                       backgroundColor: Colors.white24,
-                      valueColor: const AlwaysStoppedAnimation<Color>(Colors.red),
+                      valueColor: AlwaysStoppedAnimation<Color>(Theme.of(context).colorScheme.primary),
                     ),
                     const SizedBox(height: 8),
-                    Text("${(_downloadProgress * 100).toStringAsFixed(1)}%", style: const TextStyle(color: Colors.white)),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text("${(_downloadProgress * 100).toStringAsFixed(1)}%", style: const TextStyle(color: Colors.white)),
+                        TextButton.icon(
+                          onPressed: () { _cancelToken?.cancel(); },
+                          icon: const Icon(Icons.stop, color: Colors.redAccent),
+                          label: const Text('Stop', style: TextStyle(color: Colors.redAccent)),
+                        )
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -232,24 +242,28 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected ? Colors.red : Colors.grey[200],
+          color: isSelected 
+              ? Theme.of(context).colorScheme.primary 
+              : (Theme.of(context).brightness == Brightness.dark ? Colors.grey[800] : Colors.grey[200]),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: isSelected ? Colors.red : Colors.grey[400]!,
+            color: isSelected 
+                ? Theme.of(context).colorScheme.primary 
+                : (Theme.of(context).brightness == Brightness.dark ? Colors.grey[700]! : Colors.grey[400]!),
           ),
         ),
         child: Column(
           children: [
             Icon(
               icon,
-              color: isSelected ? Colors.white : Colors.grey[700],
+              color: isSelected ? Theme.of(context).colorScheme.onPrimary : (Theme.of(context).brightness == Brightness.dark ? Colors.grey[300] : Colors.grey[700]),
               size: 24,
             ),
             const SizedBox(height: 4),
             Text(
               label,
               style: TextStyle(
-                color: isSelected ? Colors.white : Colors.grey[700],
+                color: isSelected ? Theme.of(context).colorScheme.onPrimary : (Theme.of(context).brightness == Brightness.dark ? Colors.grey[300] : Colors.grey[700]),
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -287,10 +301,10 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                 label: Text(quality),
                 selected: isSelected,
                 onSelected: (_) => onChanged(quality),
-                backgroundColor: Colors.grey[200],
-                selectedColor: Colors.red,
+                backgroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.grey[800] : Colors.grey[200],
+                selectedColor: Theme.of(context).colorScheme.primary,
                 labelStyle: TextStyle(
-                  color: isSelected ? Colors.white : Colors.black,
+                  color: isSelected ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).textTheme.bodyMedium?.color,
                 ),
               );
             }).toList(),
@@ -366,7 +380,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         border: Border.all(color: Colors.grey[300]!),
-        color: Colors.blue.withOpacity(0.05),
+        color: Colors.blue.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
@@ -400,7 +414,7 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
                 contentPadding: EdgeInsets.zero,
                 controlAffinity: ListTileControlAffinity.leading,
                 value: isSelected,
-                activeColor: Colors.blue,
+                activeColor: Theme.of(context).colorScheme.primary,
                 title: Text(video.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14)),
                 subtitle: Text(video.duration, style: const TextStyle(fontSize: 12)),
                 onChanged: (bool? checked) {
@@ -452,6 +466,9 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
   }
   
   Future<void> _executeBatchQueue(List<VideoModel> videos) async {
+    _cancelToken?.cancel();
+    _cancelToken = CancelToken();
+
     setState(() {
       _isDownloading = true;
     });
@@ -470,14 +487,18 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
           if (_downloadType == 0) {
             await _downloader.downloadVideo(targetUrl, _selectedQuality, (progress, status) {
               if (mounted) setState(() => _downloadProgress = progress);
-            });
+            }, cancelToken: _cancelToken);
           } else {
             await _downloader.downloadAudio(targetUrl, _selectedAudioQuality, (progress, status) {
               if (mounted) setState(() => _downloadProgress = progress);
-            });
+            }, cancelToken: _cancelToken);
           }
           successes++;
         } catch (e) {
+          if (e is DioException && e.type == DioExceptionType.cancel || e.toString().contains('cancelled')) {
+            if (mounted) _showError("Batch queue cancelled.");
+            break;
+          }
           // Log failure and continue to next item in queue!
           if (mounted) _showError("Failed to fetch ${video.title}: $e");
           await Future.delayed(const Duration(seconds: 2));
@@ -492,6 +513,9 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
   }
 
   Future<void> _executeSingleDownload(String url, VideoModel meta) async {
+    _cancelToken?.cancel();
+    _cancelToken = CancelToken();
+
     setState(() {
       _isDownloading = true;
       _downloadProgress = 0.0;
@@ -504,22 +528,28 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
           url,
           _selectedQuality,
           (progress, status) {
-            if (mounted) setState(() {
-              _downloadProgress = progress;
-              _downloadStatus = status;
-            });
+            if (mounted) {
+              setState(() {
+                _downloadProgress = progress;
+                _downloadStatus = status;
+              });
+            }
           },
+          cancelToken: _cancelToken,
         );
       } else {
         await _downloader.downloadAudio(
           url,
           _selectedAudioQuality,
           (progress, status) {
-             if (mounted) setState(() {
-              _downloadProgress = progress;
-              _downloadStatus = status;
-            });
+             if (mounted) {
+               setState(() {
+                _downloadProgress = progress;
+                _downloadStatus = status;
+              });
+             }
           },
+          cancelToken: _cancelToken,
         );
       }
 
@@ -527,7 +557,11 @@ class _DownloaderScreenState extends State<DownloaderScreen> {
       _showSuccess('Download completed successfully!');
     } catch (e) {
       if (mounted) setState(() => _isDownloading = false);
-      _showError('Download failed: $e');
+      if (e is DioException && e.type == DioExceptionType.cancel || e.toString().contains('cancelled')) {
+        _showError('Download cancelled');
+      } else {
+        _showError('Download failed: $e');
+      }
     }
   }
 

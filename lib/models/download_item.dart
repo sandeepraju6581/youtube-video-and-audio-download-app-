@@ -26,4 +26,7 @@ class DownloadItem {
 
   // "video" or "audio"
   late String type;
+
+  // For drag-and-drop ordering in downloads screen
+  int sortOrder = 0;
 }

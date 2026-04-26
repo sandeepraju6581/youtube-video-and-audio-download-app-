@@ -8,12 +8,12 @@ class DownloadProgressDialog extends StatelessWidget {
   final VoidCallback? onCancel;
 
   const DownloadProgressDialog({
-    Key? key,
+    super.key,
     required this.progress,
     required this.status,
     this.fileName,
     this.onCancel,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -69,14 +69,14 @@ class DownloadTaskItem extends StatelessWidget {
   final VoidCallback? onOpen;
 
   const DownloadTaskItem({
-    Key? key,
+    super.key,
     required this.video,
     required this.progress,
     required this.status,
     this.onCancel,
     this.onRetry,
     this.onOpen,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

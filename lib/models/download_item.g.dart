@@ -32,33 +32,38 @@ const DownloadItemSchema = CollectionSchema(
       name: r'localFilePath',
       type: IsarType.string,
     ),
-    r'status': PropertySchema(
+    r'sortOrder': PropertySchema(
       id: 3,
+      name: r'sortOrder',
+      type: IsarType.long,
+    ),
+    r'status': PropertySchema(
+      id: 4,
       name: r'status',
       type: IsarType.string,
     ),
     r'thumbnailUrl': PropertySchema(
-      id: 4,
+      id: 5,
       name: r'thumbnailUrl',
       type: IsarType.string,
     ),
     r'title': PropertySchema(
-      id: 5,
+      id: 6,
       name: r'title',
       type: IsarType.string,
     ),
     r'type': PropertySchema(
-      id: 6,
+      id: 7,
       name: r'type',
       type: IsarType.string,
     ),
     r'url': PropertySchema(
-      id: 7,
+      id: 8,
       name: r'url',
       type: IsarType.string,
     ),
     r'youtubeId': PropertySchema(
-      id: 8,
+      id: 9,
       name: r'youtubeId',
       type: IsarType.string,
     )
@@ -117,12 +122,13 @@ void _downloadItemSerialize(
   writer.writeDateTime(offsets[0], object.downloadedAt);
   writer.writeString(offsets[1], object.duration);
   writer.writeString(offsets[2], object.localFilePath);
-  writer.writeString(offsets[3], object.status);
-  writer.writeString(offsets[4], object.thumbnailUrl);
-  writer.writeString(offsets[5], object.title);
-  writer.writeString(offsets[6], object.type);
-  writer.writeString(offsets[7], object.url);
-  writer.writeString(offsets[8], object.youtubeId);
+  writer.writeLong(offsets[3], object.sortOrder);
+  writer.writeString(offsets[4], object.status);
+  writer.writeString(offsets[5], object.thumbnailUrl);
+  writer.writeString(offsets[6], object.title);
+  writer.writeString(offsets[7], object.type);
+  writer.writeString(offsets[8], object.url);
+  writer.writeString(offsets[9], object.youtubeId);
 }
 
 DownloadItem _downloadItemDeserialize(
@@ -136,12 +142,13 @@ DownloadItem _downloadItemDeserialize(
   object.duration = reader.readString(offsets[1]);
   object.id = id;
   object.localFilePath = reader.readString(offsets[2]);
-  object.status = reader.readString(offsets[3]);
-  object.thumbnailUrl = reader.readString(offsets[4]);
-  object.title = reader.readString(offsets[5]);
-  object.type = reader.readString(offsets[6]);
-  object.url = reader.readString(offsets[7]);
-  object.youtubeId = reader.readString(offsets[8]);
+  object.sortOrder = reader.readLong(offsets[3]);
+  object.status = reader.readString(offsets[4]);
+  object.thumbnailUrl = reader.readString(offsets[5]);
+  object.title = reader.readString(offsets[6]);
+  object.type = reader.readString(offsets[7]);
+  object.url = reader.readString(offsets[8]);
+  object.youtubeId = reader.readString(offsets[9]);
   return object;
 }
 
@@ -159,7 +166,7 @@ P _downloadItemDeserializeProp<P>(
     case 2:
       return (reader.readString(offset)) as P;
     case 3:
-      return (reader.readString(offset)) as P;
+      return (reader.readLong(offset)) as P;
     case 4:
       return (reader.readString(offset)) as P;
     case 5:
@@ -169,6 +176,8 @@ P _downloadItemDeserializeProp<P>(
     case 7:
       return (reader.readString(offset)) as P;
     case 8:
+      return (reader.readString(offset)) as P;
+    case 9:
       return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -746,6 +755,62 @@ extension DownloadItemQueryFilter
       return query.addFilterCondition(FilterCondition.greaterThan(
         property: r'localFilePath',
         value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<DownloadItem, DownloadItem, QAfterFilterCondition>
+      sortOrderEqualTo(int value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'sortOrder',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<DownloadItem, DownloadItem, QAfterFilterCondition>
+      sortOrderGreaterThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'sortOrder',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<DownloadItem, DownloadItem, QAfterFilterCondition>
+      sortOrderLessThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'sortOrder',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<DownloadItem, DownloadItem, QAfterFilterCondition>
+      sortOrderBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'sortOrder',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
       ));
     });
   }
@@ -1604,6 +1669,18 @@ extension DownloadItemQuerySortBy
     });
   }
 
+  QueryBuilder<DownloadItem, DownloadItem, QAfterSortBy> sortBySortOrder() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sortOrder', Sort.asc);
+    });
+  }
+
+  QueryBuilder<DownloadItem, DownloadItem, QAfterSortBy> sortBySortOrderDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sortOrder', Sort.desc);
+    });
+  }
+
   QueryBuilder<DownloadItem, DownloadItem, QAfterSortBy> sortByStatus() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'status', Sort.asc);
@@ -1730,6 +1807,18 @@ extension DownloadItemQuerySortThenBy
     });
   }
 
+  QueryBuilder<DownloadItem, DownloadItem, QAfterSortBy> thenBySortOrder() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sortOrder', Sort.asc);
+    });
+  }
+
+  QueryBuilder<DownloadItem, DownloadItem, QAfterSortBy> thenBySortOrderDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sortOrder', Sort.desc);
+    });
+  }
+
   QueryBuilder<DownloadItem, DownloadItem, QAfterSortBy> thenByStatus() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'status', Sort.asc);
@@ -1827,6 +1916,12 @@ extension DownloadItemQueryWhereDistinct
     });
   }
 
+  QueryBuilder<DownloadItem, DownloadItem, QDistinct> distinctBySortOrder() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'sortOrder');
+    });
+  }
+
   QueryBuilder<DownloadItem, DownloadItem, QDistinct> distinctByStatus(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -1894,6 +1989,12 @@ extension DownloadItemQueryProperty
   QueryBuilder<DownloadItem, String, QQueryOperations> localFilePathProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'localFilePath');
+    });
+  }
+
+  QueryBuilder<DownloadItem, int, QQueryOperations> sortOrderProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'sortOrder');
     });
   }
 
