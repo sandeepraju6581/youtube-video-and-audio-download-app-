@@ -159,6 +159,9 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
       title: item.title,
       artist: 'Downloaded Audio',
       artUri: item.thumbnailUrl.isNotEmpty ? Uri.tryParse(item.thumbnailUrl) : null,
+      extras: {
+        'localFilePath': item.localFilePath,
+      },
     );
 
     await _playFromMediaItem(Uri.file(item.localFilePath), mItem);

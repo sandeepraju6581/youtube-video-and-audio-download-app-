@@ -110,7 +110,8 @@ class _GlobalMiniPlayerState extends State<GlobalMiniPlayer> {
     final isShuffle = audioHandler.isShuffle;
     final isLoop = audioHandler.isLoop;
 
-    final imagePath = _currentMediaItem!.id;
+    final localFilePath = _currentMediaItem!.extras?['localFilePath'] as String?;
+    final imagePath = localFilePath ?? _currentMediaItem!.id;
     final thumbFile = File('$imagePath.jpg');
     final networkUrl = _currentMediaItem!.artUri?.toString() ?? '';
 

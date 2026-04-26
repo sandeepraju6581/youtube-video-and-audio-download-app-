@@ -27,6 +27,7 @@ dependencies:
   audio_service: ^0.18.15
   shared_preferences: ^2.5.4
   speech_to_text: ^7.3.0
+  simple_pip_mode: ^1.1.0
 
 dev_dependencies:
   flutter_test:

@@ -96,6 +96,17 @@ class IsarService {
     }
   }
 
+  Future<void> addMultipleToPlaylist(int playlistId, List<DownloadItem> newItems) async {
+    final isar = await db;
+    final playlist = await isar.playlists.get(playlistId);
+    if (playlist != null) {
+      await isar.writeTxn(() async {
+        playlist.items.addAll(newItems);
+        await playlist.items.save();
+      });
+    }
+  }
+
   Future<void> removeFromPlaylist(int playlistId, DownloadItem item) async {
     final isar = await db;
     final playlist = await isar.playlists.get(playlistId);
