@@ -1,7 +1,9 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:nfc_manager/nfc_manager.dart';
 import '../services/local_share_service.dart';
 import '../models/download_item.dart';
 import '../main.dart'; // To access isarService
@@ -21,6 +23,7 @@ class _QrShareScreenState extends State<QrShareScreen> {
   bool _isLoading = true;
   String? _error;
   final List<DownloadItem> _fetchedItems = [];
+  bool _nfcWritten = false;
 
   @override
   void initState() {
@@ -96,6 +99,83 @@ class _QrShareScreenState extends State<QrShareScreen> {
     }
   }
 
+  Future<void> _writeToNfc() async {
+    if (_shareUrl == null) return;
+
+    // Check availability
+    bool isAvailable = await NfcManager.instance.isAvailable();
+    if (!isAvailable) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('NFC is not available on this device.')),
+        );
+      }
+      return;
+    }
+
+    // Show dialog to prompt user to tap tag
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Ready to Write'),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.nfc, size: 64, color: Colors.blue),
+            SizedBox(height: 16),
+            Text('Hold your NFC tag near the back of your device.'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              NfcManager.instance.stopSession();
+              Navigator.pop(context);
+            },
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+
+    // Start Session
+    NfcManager.instance.startSession(onDiscovered: (NfcTag tag) async {
+      var ndef = Ndef.from(tag);
+      if (ndef == null || !ndef.isWritable) {
+        NfcManager.instance.stopSession(errorMessage: 'Tag is not writable.');
+        return;
+      }
+
+      NdefMessage message = NdefMessage([
+        NdefRecord.createText(_shareUrl!),
+        NdefRecord(
+          typeNameFormat: NdefTypeNameFormat.nfcExternal,
+          type: Uint8List.fromList('android.com:pkg'.codeUnits),
+          identifier: Uint8List.fromList([]),
+          payload: Uint8List.fromList('com.example.videodownloader'.codeUnits),
+        ),
+      ]);
+
+      try {
+        await ndef.write(message);
+        NfcManager.instance.stopSession();
+        if (mounted) {
+          Navigator.pop(context); // Close "Ready to Write" dialog
+          setState(() {
+            _nfcWritten = true;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Successfully wrote to NFC tag!')),
+          );
+        }
+      } catch (e) {
+        NfcManager.instance.stopSession(errorMessage: 'Write failed: $e');
+      }
+    });
+  }
+
   @override
   void dispose() {
     _shareService.stopSharing();
@@ -121,7 +201,7 @@ class _QrShareScreenState extends State<QrShareScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         const Text(
-                          "Scan this QR Code\nfrom another device on the same WiFi!",
+                          "Scan this QR Code or tap your written NFC tag\nfrom another device on the same WiFi!",
                           textAlign: TextAlign.center,
                           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                         ),
@@ -176,6 +256,39 @@ class _QrShareScreenState extends State<QrShareScreen> {
                           "Keep this screen open until the receiver finishes downloading.",
                           textAlign: TextAlign.center,
                           style: TextStyle(color: Colors.red, fontStyle: FontStyle.italic),
+                        ),
+                        const SizedBox(height: 24),
+                        if (_nfcWritten)
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 20),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: Colors.green.withAlpha(30),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.green),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.check_circle, color: Colors.green),
+                                SizedBox(width: 8),
+                                Text(
+                                  "NFC Tag is ready to share!",
+                                  style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ElevatedButton.icon(
+                          onPressed: _isLoading || _error != null ? null : _writeToNfc,
+                          icon: const Icon(Icons.nfc),
+                          label: Text(_nfcWritten ? 'Rewrite NFC Tag' : 'Write to NFC Tag'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                          ),
                         ),
                         const SizedBox(height: 40),
                       ],

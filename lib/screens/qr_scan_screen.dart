@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:nfc_manager/nfc_manager.dart';
 import 'package:path_provider/path_provider.dart';
 import '../main.dart';
 import '../models/download_item.dart';
@@ -20,15 +21,65 @@ class _QrScanScreenState extends State<QrScanScreen> {
   String _status = "Scanning for QR Code...";
   int _currentItemIndex = 0;
   int _totalItems = 0;
+  String? _currentTitle;
+  String? _currentThumbnail;
 
   @override
   void initState() {
     super.initState();
+    _initNfc();
+  }
+
+  Future<void> _initNfc() async {
+    bool isAvailable = await NfcManager.instance.isAvailable();
+    if (!isAvailable) return;
+
+    NfcManager.instance.startSession(onDiscovered: (NfcTag tag) async {
+      final ndef = Ndef.from(tag);
+      if (ndef == null) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tag is not NDEF formatted.')));
+        return;
+      }
+
+      final message = ndef.cachedMessage ?? await ndef.read();
+
+      for (var record in message.records) {
+        // Try to find a text record (TNF: WellKnown, Type: T)
+        if (record.typeNameFormat == NdefTypeNameFormat.nfcWellknown || record.typeNameFormat == NdefTypeNameFormat.nfcExternal) {
+          try {
+            final payload = record.payload;
+            String text;
+            
+            if (record.typeNameFormat == NdefTypeNameFormat.nfcWellknown && record.type.isNotEmpty && record.type[0] == 0x54) {
+               // Standard Text record
+               final languageCodeLength = payload[0] & 0x3F;
+               text = utf8.decode(payload.sublist(1 + languageCodeLength));
+            } else {
+               // Fallback: direct decode
+               text = utf8.decode(payload);
+            }
+
+            if (text.startsWith('{') || text.startsWith('http')) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('NFC Tag Detected!')));
+                _processPayload(text);
+              }
+              return;
+            }
+          } catch (e) {
+            continue;
+          }
+        }
+      }
+      
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No valid share data found on tag.')));
+    });
   }
 
   @override
   void dispose() {
     _scannerController.dispose();
+    NfcManager.instance.stopSession();
     super.dispose();
   }
 
@@ -123,6 +174,11 @@ class _QrScanScreenState extends State<QrScanScreen> {
         final duration = itemData['d'] as String? ?? '0:00';
         final type = itemData['tp'] as String? ?? 'audio';
         final downloadUrl = '$baseUrl/download/$i';
+
+        setState(() {
+          _currentTitle = title;
+          _currentThumbnail = thumb;
+        });
 
         await _downloadSingleFile(downloadUrl, title, thumb, duration, type);
       }
@@ -233,6 +289,31 @@ class _QrScanScreenState extends State<QrScanScreen> {
                             ),
                           ),
                           const SizedBox(height: 20),
+                          if (_currentTitle != null) ...[
+                            if (_currentThumbnail != null && _currentThumbnail!.isNotEmpty)
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.network(
+                                  _currentThumbnail!,
+                                  height: 100,
+                                  width: 177,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+                                ),
+                              ),
+                            const SizedBox(height: 12),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 20),
+                              child: Text(
+                                _currentTitle!,
+                                textAlign: TextAlign.center,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                          ],
                           Text(
                             "${(_downloadProgress * 100).toStringAsFixed(1)}%",
                             style: TextStyle(
